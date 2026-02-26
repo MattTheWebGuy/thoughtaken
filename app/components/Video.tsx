@@ -4,6 +4,7 @@ import { getLatestYouTubeVideo } from "../lib/youtube";
 export default async function Video() {
   const latestRide = SITE_CONFIG.sections.latestRide;
   const latestVideo = await getLatestYouTubeVideo(SITE_CONFIG.links.youtubeChannel, {
+    channelId: SITE_CONFIG.links.youtubeChannelId,
     fallbackVideoId: latestRide.fallbackVideoId,
     minimumLongformSeconds: latestRide.minimumLongformSeconds,
   });

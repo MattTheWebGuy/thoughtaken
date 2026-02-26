@@ -6,6 +6,7 @@ type LatestVideo = {
 };
 
 type LatestVideoOptions = {
+  channelId?: string;
   fallbackVideoId?: string;
   minimumLongformSeconds?: number;
 };
@@ -91,6 +92,8 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
     throw new Error("No recent video found in RSS feed.");
   }
 
+  const latestFeedEntry = entries[0];
+
   for (const entry of entries.slice(0, 12)) {
     const details = await getVideoPageDetails(entry.videoId);
     if (!details) continue;
@@ -98,6 +101,13 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
     if (!details.isShort && details.lengthSeconds >= minimumLongformSeconds) {
       return buildVideoResult(entry.videoId, entry.title || "Latest ThoughtTaken Ride");
     }
+  }
+
+  if (latestFeedEntry) {
+    return buildVideoResult(
+      latestFeedEntry.videoId,
+      latestFeedEntry.title || "Latest ThoughtTaken Ride",
+    );
   }
 
   throw new Error("No recent longform (non-Short) video found.");
@@ -129,11 +139,12 @@ export async function getLatestYouTubeVideo(
   channelUrl: string,
   options?: LatestVideoOptions,
 ): Promise<LatestVideo> {
+  const configuredChannelId = options?.channelId?.trim();
   const fallbackVideoId = options?.fallbackVideoId ?? "dQw4w9WgXcQ";
   const minimumLongformSeconds = options?.minimumLongformSeconds ?? 180;
 
   try {
-    const channelId = await resolveChannelId(channelUrl);
+    const channelId = configuredChannelId || (await resolveChannelId(channelUrl));
     return await findLatestLongformVideo(channelId, minimumLongformSeconds);
   } catch {
     return buildVideoResult(fallbackVideoId, "Latest ThoughtTaken Ride");
