@@ -34,6 +34,19 @@ const ipSubmissionMap = new Map<string, number[]>();
 const URL_REGEX = /(https?:\/\/|www\.)/gi;
 const SUSPICIOUS_REGEX = /<script|<iframe|\[url\]|\[link\]|href=|\bviagra\b|\bcasino\b/i;
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toHtmlParagraph(value: string) {
+  return escapeHtml(value).replace(/\n/g, "<br />");
+}
+
 function getClientIp(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return forwardedFor || request.headers.get("x-real-ip") || "unknown";
@@ -153,6 +166,10 @@ export async function POST(request: Request) {
     }
 
     const mailjetAuth = Buffer.from(`${mailjetApiKey}:${mailjetApiSecret}`).toString("base64");
+    const submittedAt = new Date().toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
     const mailjetResponse = await fetch("https://api.mailjet.com/v3.1/send", {
       method: "POST",
@@ -170,8 +187,36 @@ export async function POST(request: Request) {
             To: [{ Email: contactTo }],
             ReplyTo: { Email: email },
             Subject: `${SUBJECT_PREFIX} | ${name}`,
-            TextPart: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
-            HTMLPart: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong></p><p>${message.replace(/\n/g, "<br />")}</p>`,
+            TextPart: `Name: ${name}\nEmail: ${email}\n\nPlease do not reply to this email. Replies here are not monitored.\nTo respond, email the sender directly at: ${email}\n\nMessage:\n${message}`,
+            HTMLPart: `
+              <div style="margin:0;padding:24px;background:#0b0b0b;font-family:Arial,Helvetica,sans-serif;color:#e5e7eb;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#121212;border:1px solid #262626;border-radius:14px;overflow:hidden;">
+                  <tr>
+                    <td style="padding:18px 22px;background:#111111;border-bottom:1px solid #262626;">
+                      <h2 style="margin:0;font-size:18px;letter-spacing:0.08em;text-transform:uppercase;color:#ffffff;">THOUGHTAKEN Contact</h2>
+                      <p style="margin:6px 0 0 0;font-size:12px;color:#a3a3a3;">Submitted ${escapeHtml(submittedAt)}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:18px 22px;">
+                      <p style="margin:0 0 10px 0;font-size:13px;color:#a3a3a3;text-transform:uppercase;letter-spacing:0.07em;">Sender</p>
+                      <p style="margin:0 0 4px 0;font-size:16px;color:#ffffff;font-weight:700;">${escapeHtml(name)}</p>
+                      <p style="margin:0 0 14px 0;font-size:14px;color:#d1d5db;">${escapeHtml(email)}</p>
+
+                      <div style="margin:0 0 14px 0;padding:10px 12px;background:#0c0c0c;border:1px solid #2f2f2f;border-radius:10px;color:#d1d5db;font-size:13px;line-height:1.5;">
+                        Please do not reply to this email. Replies here are not monitored.<br />
+                        To respond, email the sender directly at <strong style="color:#ffffff;">${escapeHtml(email)}</strong>.
+                      </div>
+
+                      <p style="margin:0 0 10px 0;font-size:13px;color:#a3a3a3;text-transform:uppercase;letter-spacing:0.07em;">Message</p>
+                      <div style="margin:0;padding:14px;background:#0c0c0c;border:1px solid #262626;border-radius:10px;font-size:15px;line-height:1.6;color:#f5f5f5;">
+                        ${toHtmlParagraph(message)}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            `,
             CustomID: "ThoughtTaken-Contact-Form",
           },
         ],
