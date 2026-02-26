@@ -58,12 +58,61 @@ function parseFeedEntries(xml: string) {
   }));
 }
 
+function parseLatestVideoFromPageHtml(html: string) {
+  const videoMatch = html.match(
+    /"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,400}?"title":\{"runs":\[\{"text":"([^"]+)"\]/,
+  );
+
+  if (!videoMatch?.[1]) {
+    return null;
+  }
+
+  return {
+    videoId: videoMatch[1],
+    title: decodeXmlEntities(videoMatch[2] || "Latest ThoughtTaken Ride"),
+  };
+}
+
+async function findLatestVideoFromDataApi(channelId: string, apiKey: string) {
+  const endpoint = new URL("https://www.googleapis.com/youtube/v3/search");
+  endpoint.searchParams.set("part", "snippet");
+  endpoint.searchParams.set("channelId", channelId);
+  endpoint.searchParams.set("maxResults", "1");
+  endpoint.searchParams.set("order", "date");
+  endpoint.searchParams.set("type", "video");
+  endpoint.searchParams.set("key", apiKey);
+
+  const response = await fetch(endpoint, {
+    next: { revalidate: 60 },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to load YouTube Data API search results.");
+  }
+
+  const payload = (await response.json()) as {
+    items?: Array<{
+      id?: { videoId?: string };
+      snippet?: { title?: string };
+    }>;
+  };
+
+  const first = payload.items?.[0];
+  const videoId = first?.id?.videoId;
+
+  if (!videoId) {
+    throw new Error("No latest video found in YouTube Data API results.");
+  }
+
+  return buildVideoResult(videoId, first?.snippet?.title || "Latest ThoughtTaken Ride");
+}
+
 async function findLatestFeedVideo(channelId: string) {
   const rssResponse = await fetch(
     `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
     {
       headers: YOUTUBE_FETCH_HEADERS,
-      next: { revalidate: 120 },
+      next: { revalidate: 60 },
     },
   );
 
@@ -82,7 +131,34 @@ async function findLatestFeedVideo(channelId: string) {
   return buildVideoResult(latestEntry.videoId, latestEntry.title || "Latest ThoughtTaken Ride");
 }
 
+async function findLatestVideoFromChannelPage(channelUrl: string) {
+  const handlePath = getHandlePath(channelUrl).replace(/\/$/, "");
+
+  const response = await fetch(`https://www.youtube.com${handlePath}`, {
+    headers: YOUTUBE_FETCH_HEADERS,
+    next: { revalidate: 120 },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to load YouTube channel page.");
+  }
+
+  const html = await response.text();
+  const latest = parseLatestVideoFromPageHtml(html);
+
+  if (!latest) {
+    throw new Error("Unable to parse latest video from YouTube channel page.");
+  }
+
+  return buildVideoResult(latest.videoId, latest.title);
+}
+
 async function resolveChannelId(channelUrl: string) {
+  const directChannelMatch = channelUrl.match(/youtube\.com\/channel\/(UC[a-zA-Z0-9_-]{22})/);
+  if (directChannelMatch?.[1]) {
+    return directChannelMatch[1];
+  }
+
   const handlePath = getHandlePath(channelUrl);
 
   const pageResponse = await fetch(`https://www.youtube.com${handlePath}`, {
@@ -112,10 +188,23 @@ export async function getLatestYouTubeVideo(
 ): Promise<LatestVideo> {
   const configuredChannelId = options?.channelId?.trim();
   const fallbackVideoId = options?.fallbackVideoId ?? "dQw4w9WgXcQ";
+  const youtubeApiKey = process.env.YOUTUBE_API_KEY?.trim();
 
   try {
     const channelId = configuredChannelId || (await resolveChannelId(channelUrl));
-    return await findLatestFeedVideo(channelId);
+
+    if (youtubeApiKey) {
+      try {
+        return await findLatestVideoFromDataApi(channelId, youtubeApiKey);
+      } catch {
+      }
+    }
+
+    try {
+      return await findLatestFeedVideo(channelId);
+    } catch {
+      return await findLatestVideoFromChannelPage(channelUrl);
+    }
   } catch {
     return buildVideoResult(fallbackVideoId, "Latest ThoughtTaken Ride");
   }
