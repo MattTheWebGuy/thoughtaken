@@ -68,10 +68,36 @@ function parseFeedEntries(xml: string) {
   }));
 }
 
+function parseVideosTabEntries(html: string) {
+  const entries = Array.from(
+    html.matchAll(
+      /"videoRenderer":\{"videoId":"([^"]+)"[\s\S]*?"title":\{"runs":\[\{"text":"([^"]+)"\]/g,
+    ),
+  );
+
+  const seen = new Set<string>();
+  const parsed: Array<{ videoId: string; title: string }> = [];
+
+  for (const entry of entries) {
+    const videoId = entry[1];
+    if (seen.has(videoId)) {
+      continue;
+    }
+
+    seen.add(videoId);
+    parsed.push({
+      videoId,
+      title: decodeXmlEntities(entry[2]),
+    });
+  }
+
+  return parsed;
+}
+
 async function getVideoPageDetails(videoId: string) {
   const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
     headers: YOUTUBE_FETCH_HEADERS,
-    next: { revalidate: 900 },
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -102,7 +128,7 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
     `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
     {
       headers: YOUTUBE_FETCH_HEADERS,
-      next: { revalidate: 900 },
+      cache: "no-store",
     },
   );
 
@@ -169,6 +195,82 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
   throw new Error("No recent longform (non-Short) video found.");
 }
 
+async function findLatestVideoFromVideosTab(
+  channelUrl: string,
+  minimumLongformSeconds: number,
+) {
+  const handlePath = getHandlePath(channelUrl).replace(/\/$/, "");
+  const videosTabUrl = `https://www.youtube.com${handlePath}/videos`;
+
+  logYoutubeDebug("Fetching channel videos tab", {
+    videosTabUrl,
+    minimumLongformSeconds,
+  });
+
+  const response = await fetch(videosTabUrl, {
+    headers: YOUTUBE_FETCH_HEADERS,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to load YouTube videos tab.");
+  }
+
+  const html = await response.text();
+  const entries = parseVideosTabEntries(html);
+
+  logYoutubeDebug("Parsed videos tab entries", {
+    videosTabUrl,
+    entryCount: entries.length,
+    firstEntry: entries[0]
+      ? {
+          videoId: entries[0].videoId,
+          title: entries[0].title,
+        }
+      : null,
+  });
+
+  if (entries.length === 0) {
+    throw new Error("No entries found on YouTube videos tab.");
+  }
+
+  const latestVideosTabEntry = entries[0];
+
+  for (const entry of entries.slice(0, 12)) {
+    const details = await getVideoPageDetails(entry.videoId);
+    if (!details) {
+      logYoutubeDebug("Skipping videos-tab entry: could not load watch-page details", {
+        videoId: entry.videoId,
+      });
+      continue;
+    }
+
+    logYoutubeDebug("Evaluating videos-tab entry", {
+      videoId: entry.videoId,
+      isShort: details.isShort,
+      lengthSeconds: details.lengthSeconds,
+    });
+
+    if (!details.isShort && details.lengthSeconds >= minimumLongformSeconds) {
+      logYoutubeDebug("Selected videos-tab longform entry", {
+        videoId: entry.videoId,
+        title: entry.title,
+      });
+      return buildVideoResult(entry.videoId, entry.title || "Latest ThoughtTaken Ride");
+    }
+  }
+
+  logYoutubeDebug("No qualifying longform on videos tab, using first videos-tab entry", {
+    videoId: latestVideosTabEntry.videoId,
+    title: latestVideosTabEntry.title,
+  });
+
+  return buildVideoResult(
+    latestVideosTabEntry.videoId,
+    latestVideosTabEntry.title || "Latest ThoughtTaken Ride",
+  );
+}
+
 async function resolveChannelId(channelUrl: string) {
   const handlePath = getHandlePath(channelUrl);
   logYoutubeDebug("Resolving channel ID from handle page", {
@@ -178,7 +280,7 @@ async function resolveChannelId(channelUrl: string) {
 
   const pageResponse = await fetch(`https://www.youtube.com${handlePath}`, {
     headers: YOUTUBE_FETCH_HEADERS,
-    next: { revalidate: 900 },
+    cache: "no-store",
   });
 
   if (!pageResponse.ok) {
@@ -217,8 +319,20 @@ export async function getLatestYouTubeVideo(
       minimumLongformSeconds,
     });
 
-    const channelId = configuredChannelId || (await resolveChannelId(channelUrl));
-    const selected = await findLatestLongformVideo(channelId, minimumLongformSeconds);
+    let selected: LatestVideo | null = null;
+
+    try {
+      selected = await findLatestVideoFromVideosTab(channelUrl, minimumLongformSeconds);
+    } catch (videosTabError) {
+      const reason =
+        videosTabError instanceof Error ? videosTabError.message : String(videosTabError);
+      logYoutubeDebug("Videos-tab resolution failed, falling back to RSS", {
+        reason,
+      });
+
+      const channelId = configuredChannelId || (await resolveChannelId(channelUrl));
+      selected = await findLatestLongformVideo(channelId, minimumLongformSeconds);
+    }
 
     logYoutubeDebug("Latest-video resolution success", {
       selectedVideoId: selected.videoId,
