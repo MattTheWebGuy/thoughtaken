@@ -1,0 +1,184 @@
+{
+  "branding": {
+    "creatorName": "Matthew Woods",
+    "logoText": "THOUGHTAKEN",
+    "rightsReservedName": "ThoughTaken"
+  },
+  "links": {
+    "youtubeChannel": "https://youtube.com/@thoughtaken",
+    "joinMembership": "https://youtube.com/@thoughtaken/join",
+    "store": "https://thoughtaken.com/collections/all",
+    "subscribe": "https://youtube.com/@thoughtaken"
+  },
+  "navigation": {
+    "items": [
+      {
+        "label": "Shop",
+        "href": "https://thoughtaken.com/collections/all",
+        "highlighted": false
+      },
+      {
+        "label": "YouTube",
+        "href": "https://youtube.com/@thoughtaken",
+        "highlighted": false
+      },
+      {
+        "label": "Join",
+        "href": "https://youtube.com/@thoughtaken/join",
+        "highlighted": true
+      }
+    ]
+  },
+  "images": {
+    "hero": "/images/hero/hero1.jpg",
+    "heroMobile": "/images/hero/hero_mobile.jpg",
+    "about": "/images/about/aboutpic.jpg",
+    "bikeStrip": "/images/bike-strip/ctaimg.jpg",
+    "productFallback": "https://picsum.photos/seed/productfallback/900/1000"
+  },
+  "socials": [
+    {
+      "platform": "YouTube",
+      "handle": "@thoughtaken",
+      "href": "https://youtube.com/@thoughtaken",
+      "enabled": true,
+      "featured": true
+    },
+    {
+      "platform": "TikTok",
+      "handle": "@thoughtaken",
+      "href": "https://tiktok.com/@thoughtaken",
+      "enabled": true,
+      "featured": false
+    },
+    {
+      "platform": "Instagram",
+      "handle": "@thoughtaken",
+      "href": "https://instagram.com/thoughtaken",
+      "enabled": true,
+      "featured": false
+    }
+  ],
+  "sections": {
+    "hero": {
+      "title": "THOUGHTAKEN",
+      "subtitle": "Motovlogs that aren’t really motovlogs. A place for people who just like riding.",
+      "primaryCtaLabel": "Join The Movement",
+      "secondaryLinkLabel": "Watch The Ride"
+    },
+    "socialProof": {
+      "items": [
+        {
+          "label": "Followers",
+          "value": "6.8M"
+        },
+        {
+          "label": "Views",
+          "value": "1.25B+"
+        },
+        {
+          "label": "Years",
+          "value": "4+"
+        }
+      ]
+    },
+    "about": {
+      "title": "Matthew Woods / ThoughTaken",
+      "headline": "Rider. Creator. Community builder.",
+      "description": "Sharing the road as it is — the speed, the discipline, the mistakes, and the freedom that keeps us coming back.",
+      "buttonLabel": "Follow the Ride"
+    },
+    "products": {
+      "title": "Limited Drops",
+      "badgeText": "Limited",
+      "buyButtonLabel": "Buy Now",
+      "items": [
+        {
+          "slug": "i-pull-ova-hoodie",
+          "name": "I pull ova :3",
+          "price": "$62.10",
+          "description": "Premium I pull ova hoodie for cold night rides.",
+          "shopLink": "https://thoughtaken.com/products/i-pull-ova-3",
+          "images": [
+            "/images/products/product1/p1.avif",
+            "/images/products/product1/p2.avif",
+            "/images/products/product1/p3.avif",
+            "/images/products/product1/p4.avif",
+            "/images/products/product1/p5.avif",
+            "/images/products/product1/p6.avif"
+          ]
+        },
+        {
+          "slug": "stealth-pull-ova",
+          "name": "I pull ova (no front stuff)",
+          "price": "$47.00",
+          "description": "I can produce this version cheaper if all you care about is the back (for the bikers out there)",
+          "shopLink": "https://thoughtaken.com/products/i-pull-ova-no-front-stuff",
+          "images": [
+            "/images/products/product2/p1.avif",
+            "/images/products/product2/p2.avif",
+            "/images/products/product2/p3.avif",
+            "/images/products/product2/p4.avif",
+            "/images/products/product2/p5.avif"
+          ]
+        }
+      ]
+    },
+    "latestRide": {
+      "title": "Latest Upload",
+      "description": "Catch the newest video from ThoughTaken — whether it’s a ride, a story, or gear breakdown.",
+      "primaryButtonLabel": "Subscribe on YouTube",
+      "secondaryButtonLabel": "Join The Movement",
+      "fallbackVideoId": "krLWQnAl2Yw",
+      "minimumLongformSeconds": 180
+    },
+    "community": {
+      "title": "Join The Community"
+    },
+    "finalCta": {
+      "title": "This Isn’t Content. It’s Culture.",
+      "primaryButtonLabel": "Join The Movement",
+      "secondaryButtonLabel": "Shop The Drop"
+    },
+    "contact": {
+      "title": "Contact",
+      "description": "Quick message form for brand inquiries and collaborations.",
+      "placeholders": {
+        "name": "Name",
+        "email": "Email",
+        "message": "Message"
+      },
+      "buttonLabel": "Send Message",
+      "buttonSendingLabel": "Sending...",
+      "successMessage": "Message sent. We will reach back shortly.",
+      "fallbackErrorMessage": "Failed to send message."
+    }
+  },
+  "contactApi": {
+    "email": {
+      "subjectPrefix": "THOUGHTAKEN Contact"
+    },
+    "validation": {
+      "minSubmitDelayMs": 2500,
+      "nameMinLength": 2,
+      "nameMaxLength": 80,
+      "messageMinLength": 15,
+      "messageMaxLength": 2000,
+      "maxLinksInMessage": 2,
+      "rateLimitWindowMs": 600000,
+      "rateLimitMaxSubmissions": 5
+    },
+    "errors": {
+      "botBlocked": "Bot traffic is blocked.",
+      "submissionValidationFailed": "Submission validation failed.",
+      "tooManySubmissions": "Too many submissions. Please try again later.",
+      "allFieldsRequired": "All fields are required.",
+      "invalidNameLength": "Name must be between 2 and 80 characters.",
+      "invalidMessageLength": "Message must be between 15 and 2000 characters.",
+      "spamBlocked": "Message looks like spam and was blocked.",
+      "invalidEmail": "Please enter a valid email.",
+      "missingSmtpConfig": "Contact forwarding is not configured yet. Add SMTP and CONTACT_* env variables.",
+      "sendFailure": "Unable to send message right now."
+    }
+  }
+}
