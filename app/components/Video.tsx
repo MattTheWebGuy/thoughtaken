@@ -1,6 +1,8 @@
 import { SITE_CONFIG } from "../lib/site-config";
 import { getLatestYouTubeVideo } from "../lib/youtube";
 
+export const dynamic = "force-dynamic";
+
 export default async function Video() {
   const latestRide = SITE_CONFIG.sections.latestRide;
   const latestVideo = await getLatestYouTubeVideo(SITE_CONFIG.links.youtubeChannel, {

@@ -11,6 +11,13 @@ type LatestVideoOptions = {
   minimumLongformSeconds?: number;
 };
 
+const YOUTUBE_FETCH_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+
 function logYoutubeDebug(message: string, details?: Record<string, unknown>) {
   if (details) {
     console.info("[youtube-latest]", message, details);
@@ -63,6 +70,7 @@ function parseFeedEntries(xml: string) {
 
 async function getVideoPageDetails(videoId: string) {
   const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: YOUTUBE_FETCH_HEADERS,
     next: { revalidate: 900 },
   });
 
@@ -92,7 +100,10 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
 
   const rssResponse = await fetch(
     `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
-    { next: { revalidate: 900 } },
+    {
+      headers: YOUTUBE_FETCH_HEADERS,
+      next: { revalidate: 900 },
+    },
   );
 
   if (!rssResponse.ok) {
@@ -166,6 +177,7 @@ async function resolveChannelId(channelUrl: string) {
   });
 
   const pageResponse = await fetch(`https://www.youtube.com${handlePath}`, {
+    headers: YOUTUBE_FETCH_HEADERS,
     next: { revalidate: 900 },
   });
 
