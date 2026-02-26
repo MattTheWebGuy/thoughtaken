@@ -11,6 +11,15 @@ type LatestVideoOptions = {
   minimumLongformSeconds?: number;
 };
 
+function logYoutubeDebug(message: string, details?: Record<string, unknown>) {
+  if (details) {
+    console.info("[youtube-latest]", message, details);
+    return;
+  }
+
+  console.info("[youtube-latest]", message);
+}
+
 function getHandlePath(channelUrl: string) {
   try {
     const url = new URL(channelUrl);
@@ -76,6 +85,11 @@ async function getVideoPageDetails(videoId: string) {
 }
 
 async function findLatestLongformVideo(channelId: string, minimumLongformSeconds: number) {
+  logYoutubeDebug("Fetching channel RSS feed", {
+    channelId,
+    minimumLongformSeconds,
+  });
+
   const rssResponse = await fetch(
     `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
     { next: { revalidate: 900 } },
@@ -88,6 +102,17 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
   const xml = await rssResponse.text();
   const entries = parseFeedEntries(xml);
 
+  logYoutubeDebug("Parsed feed entries", {
+    channelId,
+    entryCount: entries.length,
+    firstEntry: entries[0]
+      ? {
+          videoId: entries[0].videoId,
+          title: entries[0].title,
+        }
+      : null,
+  });
+
   if (entries.length === 0) {
     throw new Error("No recent video found in RSS feed.");
   }
@@ -96,14 +121,34 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
 
   for (const entry of entries.slice(0, 12)) {
     const details = await getVideoPageDetails(entry.videoId);
-    if (!details) continue;
+    if (!details) {
+      logYoutubeDebug("Skipping entry: could not load watch-page details", {
+        videoId: entry.videoId,
+      });
+      continue;
+    }
+
+    logYoutubeDebug("Evaluating entry", {
+      videoId: entry.videoId,
+      isShort: details.isShort,
+      lengthSeconds: details.lengthSeconds,
+    });
 
     if (!details.isShort && details.lengthSeconds >= minimumLongformSeconds) {
+      logYoutubeDebug("Selected longform entry", {
+        videoId: entry.videoId,
+        title: entry.title,
+      });
       return buildVideoResult(entry.videoId, entry.title || "Latest ThoughtTaken Ride");
     }
   }
 
   if (latestFeedEntry) {
+    logYoutubeDebug("No qualifying longform found, using latest feed entry", {
+      videoId: latestFeedEntry.videoId,
+      title: latestFeedEntry.title,
+    });
+
     return buildVideoResult(
       latestFeedEntry.videoId,
       latestFeedEntry.title || "Latest ThoughtTaken Ride",
@@ -115,6 +160,11 @@ async function findLatestLongformVideo(channelId: string, minimumLongformSeconds
 
 async function resolveChannelId(channelUrl: string) {
   const handlePath = getHandlePath(channelUrl);
+  logYoutubeDebug("Resolving channel ID from handle page", {
+    channelUrl,
+    handlePath,
+  });
+
   const pageResponse = await fetch(`https://www.youtube.com${handlePath}`, {
     next: { revalidate: 900 },
   });
@@ -132,6 +182,10 @@ async function resolveChannelId(channelUrl: string) {
     throw new Error("Unable to resolve channel ID from handle.");
   }
 
+  logYoutubeDebug("Resolved channel ID from handle", {
+    channelId: channelMatch[1],
+  });
+
   return channelMatch[1];
 }
 
@@ -144,9 +198,29 @@ export async function getLatestYouTubeVideo(
   const minimumLongformSeconds = options?.minimumLongformSeconds ?? 180;
 
   try {
+    logYoutubeDebug("Starting latest-video resolution", {
+      channelUrl,
+      configuredChannelId: configuredChannelId || null,
+      fallbackVideoId,
+      minimumLongformSeconds,
+    });
+
     const channelId = configuredChannelId || (await resolveChannelId(channelUrl));
-    return await findLatestLongformVideo(channelId, minimumLongformSeconds);
-  } catch {
+    const selected = await findLatestLongformVideo(channelId, minimumLongformSeconds);
+
+    logYoutubeDebug("Latest-video resolution success", {
+      selectedVideoId: selected.videoId,
+      selectedTitle: selected.title,
+    });
+
+    return selected;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logYoutubeDebug("Falling back to fallback video", {
+      fallbackVideoId,
+      reason,
+    });
+
     return buildVideoResult(fallbackVideoId, "Latest ThoughtTaken Ride");
   }
 }
