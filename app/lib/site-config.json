@@ -156,7 +156,16 @@
   },
   "contactApi": {
     "email": {
-      "subjectPrefix": "THOUGHTAKEN Contact"
+      "subjectPrefix": "THOUGHTAKEN Contact",
+      "requiresServerEnv": true,
+      "envVarKeys": {
+        "host": "smtp.gmail.com",
+        "port": "465",
+        "user": "matthewebguy@gmail.com",
+        "pass": "SMTP_PASS",
+        "to": "mattlutz2022@gmail.com",
+        "from": "matthewebguy@gmail.com"
+      }
     },
     "validation": {
       "minSubmitDelayMs": 2500,
