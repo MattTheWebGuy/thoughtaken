@@ -16,6 +16,14 @@ type CounterConfig = {
 };
 
 const ANIMATION_DURATION_MS = 1400;
+const YEARS_ANIMATION_DURATION_MS = 650;
+const JOINED_DATE = new Date("2022-04-01T00:00:00Z");
+const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.2425;
+
+function getRoundedUpYearsSinceJoined() {
+  const years = (Date.now() - JOINED_DATE.getTime()) / MS_PER_YEAR;
+  return Math.max(1, Math.ceil(years));
+}
 
 function parseCounter(item: { label: string; value: string }): CounterConfig {
   const rawValue = item.value.trim();
@@ -80,7 +88,20 @@ function formatCounterValue(config: CounterConfig, current: number) {
 }
 
 export default function StatsStrip() {
-  const stats = SITE_CONFIG.sections.socialProof.items;
+  const stats = useMemo(
+    () =>
+      SITE_CONFIG.sections.socialProof.items.map((item) => {
+        if (item.label.trim().toLowerCase() !== "years") {
+          return item;
+        }
+
+        return {
+          ...item,
+          value: `${getRoundedUpYearsSinceJoined()}+`,
+        };
+      }),
+    [],
+  );
   const counterConfigs = useMemo(() => stats.map(parseCounter), [stats]);
 
   const [displayValues, setDisplayValues] = useState<string[]>(() =>
@@ -108,13 +129,17 @@ export default function StatsStrip() {
     const startAnimation = () => {
       counterConfigs.forEach((config, index) => {
         let currentValue = config.start;
+        const durationMs =
+          config.label.trim().toLowerCase() === "years"
+            ? YEARS_ANIMATION_DURATION_MS
+            : ANIMATION_DURATION_MS;
         const steps = Math.max(
           1,
           Math.ceil((config.target - config.start) / config.increment),
         );
         const stepIntervalMs = Math.max(
           16,
-          Math.floor(ANIMATION_DURATION_MS / steps),
+          Math.floor(durationMs / steps),
         );
 
         const interval = window.setInterval(() => {
@@ -134,7 +159,7 @@ export default function StatsStrip() {
         frameTimeout = window.setTimeout(() => {
           updateDisplay(index, formatCounterValue(config, config.target));
           window.clearInterval(interval);
-        }, ANIMATION_DURATION_MS);
+        }, durationMs);
       });
     };
 
