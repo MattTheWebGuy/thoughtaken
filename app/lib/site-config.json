@@ -153,41 +153,5 @@
       "successMessage": "Message sent. We will reach back shortly.",
       "fallbackErrorMessage": "Failed to send message."
     }
-  },
-  "contactApi": {
-    "email": {
-      "subjectPrefix": "THOUGHTAKEN Contact",
-      "requiresServerEnv": true,
-      "envVarKeys": {
-        "host": "smtp.gmail.com",
-        "port": "465",
-        "user": "matthewebguy@gmail.com",
-        "pass": "lxmFree891!",
-        "to": "mattlutz2022@gmail.com",
-        "from": "matthewebguy@gmail.com"
-      }
-    },
-    "validation": {
-      "minSubmitDelayMs": 2500,
-      "nameMinLength": 2,
-      "nameMaxLength": 80,
-      "messageMinLength": 15,
-      "messageMaxLength": 2000,
-      "maxLinksInMessage": 2,
-      "rateLimitWindowMs": 600000,
-      "rateLimitMaxSubmissions": 5
-    },
-    "errors": {
-      "botBlocked": "Bot traffic is blocked.",
-      "submissionValidationFailed": "Submission validation failed.",
-      "tooManySubmissions": "Too many submissions. Please try again later.",
-      "allFieldsRequired": "All fields are required.",
-      "invalidNameLength": "Name must be between 2 and 80 characters.",
-      "invalidMessageLength": "Message must be between 15 and 2000 characters.",
-      "spamBlocked": "Message looks like spam and was blocked.",
-      "invalidEmail": "Please enter a valid email.",
-      "missingSmtpConfig": "Contact forwarding is not configured yet. Add SMTP and CONTACT_* env variables.",
-      "sendFailure": "Unable to send message right now."
-    }
   }
 }

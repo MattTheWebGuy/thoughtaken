@@ -24,7 +24,7 @@ function buildVideoResult(videoId: string, title: string): LatestVideo {
     videoId,
     title,
     watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    embedUrl: `https://www.youtube.com/embed/${videoId}`,
+    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`,
   };
 }
 

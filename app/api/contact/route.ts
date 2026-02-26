@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { isbot } from "isbot";
-import nodemailer from "nodemailer";
-import { SITE_CONFIG } from "../../lib/site-config";
 
 type ContactPayload = {
   name?: string;
@@ -12,11 +10,26 @@ type ContactPayload = {
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const { contactApi } = SITE_CONFIG;
-const { validation, errors } = contactApi;
-
-const RATE_LIMIT_WINDOW_MS = validation.rateLimitWindowMs;
-const RATE_LIMIT_MAX_SUBMISSIONS = validation.rateLimitMaxSubmissions;
+const SUBJECT_PREFIX = "THOUGHTAKEN Contact";
+const MIN_SUBMIT_DELAY_MS = 2500;
+const NAME_MIN_LENGTH = 2;
+const NAME_MAX_LENGTH = 80;
+const MESSAGE_MIN_LENGTH = 15;
+const MESSAGE_MAX_LENGTH = 2000;
+const MAX_LINKS_IN_MESSAGE = 2;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_SUBMISSIONS = 5;
+const ERROR_BOT_BLOCKED = "Bot traffic is blocked.";
+const ERROR_SUBMISSION_VALIDATION = "Submission validation failed.";
+const ERROR_TOO_MANY_SUBMISSIONS = "Too many submissions. Please try again later.";
+const ERROR_ALL_FIELDS_REQUIRED = "All fields are required.";
+const ERROR_INVALID_NAME_LENGTH = "Name must be between 2 and 80 characters.";
+const ERROR_INVALID_MESSAGE_LENGTH = "Message must be between 15 and 2000 characters.";
+const ERROR_SPAM_BLOCKED = "Message looks like spam and was blocked.";
+const ERROR_INVALID_EMAIL = "Please enter a valid email.";
+const ERROR_MISSING_MAIL_CONFIG =
+  "Contact forwarding is not configured yet. Add MAILJET_* and CONTACT_TO env variables.";
+const ERROR_SEND_FAILURE = "Unable to send message right now.";
 const ipSubmissionMap = new Map<string, number[]>();
 const URL_REGEX = /(https?:\/\/|www\.)/gi;
 const SUSPICIOUS_REGEX = /<script|<iframe|\[url\]|\[link\]|href=|\bviagra\b|\bcasino\b/i;
@@ -46,7 +59,7 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get("user-agent") || "";
     if (isbot(userAgent)) {
       return NextResponse.json(
-        { ok: false, error: errors.botBlocked },
+        { ok: false, error: ERROR_BOT_BLOCKED },
         { status: 403 },
       );
     }
@@ -63,9 +76,9 @@ export async function POST(request: Request) {
     }
 
     const now = Date.now();
-    if (typeof formStartedAt !== "number" || now - formStartedAt < validation.minSubmitDelayMs) {
+    if (typeof formStartedAt !== "number" || now - formStartedAt < MIN_SUBMIT_DELAY_MS) {
       return NextResponse.json(
-        { ok: false, error: errors.submissionValidationFailed },
+        { ok: false, error: ERROR_SUBMISSION_VALIDATION },
         { status: 400 },
       );
     }
@@ -73,97 +86,116 @@ export async function POST(request: Request) {
     const clientIp = getClientIp(request);
     if (tooManyRecentSubmissions(clientIp, now)) {
       return NextResponse.json(
-        { ok: false, error: errors.tooManySubmissions },
+        { ok: false, error: ERROR_TOO_MANY_SUBMISSIONS },
         { status: 429 },
       );
     }
 
     if (!name || !email || !message) {
       return NextResponse.json(
-        { ok: false, error: errors.allFieldsRequired },
+        { ok: false, error: ERROR_ALL_FIELDS_REQUIRED },
         { status: 400 },
       );
     }
 
-    if (name.length < validation.nameMinLength || name.length > validation.nameMaxLength) {
+    if (name.length < NAME_MIN_LENGTH || name.length > NAME_MAX_LENGTH) {
       return NextResponse.json(
-        { ok: false, error: errors.invalidNameLength },
+        { ok: false, error: ERROR_INVALID_NAME_LENGTH },
         { status: 400 },
       );
     }
 
     if (
-      message.length < validation.messageMinLength ||
-      message.length > validation.messageMaxLength
+      message.length < MESSAGE_MIN_LENGTH ||
+      message.length > MESSAGE_MAX_LENGTH
     ) {
       return NextResponse.json(
-        { ok: false, error: errors.invalidMessageLength },
+        { ok: false, error: ERROR_INVALID_MESSAGE_LENGTH },
         { status: 400 },
       );
     }
 
     const urlCount = (message.match(URL_REGEX) || []).length;
-    if (urlCount > validation.maxLinksInMessage || SUSPICIOUS_REGEX.test(message)) {
+    if (urlCount > MAX_LINKS_IN_MESSAGE || SUSPICIOUS_REGEX.test(message)) {
       return NextResponse.json(
-        { ok: false, error: errors.spamBlocked },
+        { ok: false, error: ERROR_SPAM_BLOCKED },
         { status: 400 },
       );
     }
 
     if (!EMAIL_REGEX.test(email)) {
       return NextResponse.json(
-        { ok: false, error: errors.invalidEmail },
+        { ok: false, error: ERROR_INVALID_EMAIL },
         { status: 400 },
       );
     }
 
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpPort = Number(process.env.SMTP_PORT || "0");
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const contactTo = process.env.CONTACT_TO;
-    const contactFrom = process.env.CONTACT_FROM || smtpUser;
+    const mailjetApiKey = process.env.MAILJET_API_KEY?.trim();
+    const mailjetApiSecret = process.env.MAILJET_API_SECRET?.trim();
+    const mailjetFromEmail = process.env.MAILJET_FROM_EMAIL?.trim();
+    const mailjetFromName = process.env.MAILJET_FROM_NAME?.trim() || "ThoughtTaken";
+    const contactTo = process.env.CONTACT_TO?.trim();
 
-    if (
-      !smtpHost ||
-      !smtpPort ||
-      !smtpUser ||
-      !smtpPass ||
-      !contactTo ||
-      !contactFrom
-    ) {
+    const missingEnvKeys: string[] = [];
+    if (!mailjetApiKey) missingEnvKeys.push("MAILJET_API_KEY");
+    if (!mailjetApiSecret) missingEnvKeys.push("MAILJET_API_SECRET");
+    if (!mailjetFromEmail) missingEnvKeys.push("MAILJET_FROM_EMAIL");
+    if (!contactTo) missingEnvKeys.push("CONTACT_TO");
+
+    if (missingEnvKeys.length > 0) {
       return NextResponse.json(
         {
           ok: false,
-          error: errors.missingSmtpConfig,
+          error: `${ERROR_MISSING_MAIL_CONFIG} Missing: ${missingEnvKeys.join(", ")}`,
         },
         { status: 500 },
       );
     }
 
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
+    const mailjetAuth = Buffer.from(`${mailjetApiKey}:${mailjetApiSecret}`).toString("base64");
+
+    const mailjetResponse = await fetch("https://api.mailjet.com/v3.1/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${mailjetAuth}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        Messages: [
+          {
+            From: {
+              Email: mailjetFromEmail,
+              Name: mailjetFromName,
+            },
+            To: [{ Email: contactTo }],
+            ReplyTo: { Email: email },
+            Subject: `${SUBJECT_PREFIX} | ${name}`,
+            TextPart: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
+            HTMLPart: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong></p><p>${message.replace(/\n/g, "<br />")}</p>`,
+            CustomID: "ThoughtTaken-Contact-Form",
+          },
+        ],
+      }),
     });
 
-    await transporter.sendMail({
-      from: contactFrom,
-      to: contactTo,
-      replyTo: email,
-      subject: `${contactApi.email.subjectPrefix} | ${name}`,
-      text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
-      html: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong></p><p>${message.replace(/\n/g, "<br />")}</p>`,
-    });
+    if (!mailjetResponse.ok) {
+      const responseText = await mailjetResponse.text();
+      throw new Error(`Mailjet API error (${mailjetResponse.status}): ${responseText}`);
+    }
 
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    const isDevelopment = process.env.NODE_ENV !== "production";
+    const errorMessage =
+      error instanceof Error ? error.message : ERROR_SEND_FAILURE;
+
     return NextResponse.json(
-      { ok: false, error: errors.sendFailure },
+      {
+        ok: false,
+        error: isDevelopment
+          ? `${ERROR_SEND_FAILURE} (${errorMessage})`
+          : ERROR_SEND_FAILURE,
+      },
       { status: 500 },
     );
   }
