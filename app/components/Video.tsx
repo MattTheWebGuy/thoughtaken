@@ -1,16 +1,13 @@
 import { SITE_CONFIG } from "../lib/site-config";
 import { getLatestYouTubeVideo } from "../lib/youtube";
-import { unstable_noStore as noStore } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
 export default async function Video() {
-  noStore();
   const latestRide = SITE_CONFIG.sections.latestRide;
   const latestVideo = await getLatestYouTubeVideo(SITE_CONFIG.links.youtubeChannel, {
     channelId: SITE_CONFIG.links.youtubeChannelId,
     fallbackVideoId: latestRide.fallbackVideoId,
-    minimumLongformSeconds: latestRide.minimumLongformSeconds,
   });
 
   return (
